@@ -1,9 +1,11 @@
 [
-  "可设置小猫开始奔跑的阈值 cpu 与磁盘内存占用比",
+  "C:\\Users\\801\\Desktop\\onOff-source",
   "C:\\Windows\\System32\\cmd.exe",
+  "C:\\Users\\801\\Desktop\\新建文件夹 (5)",
+  "%windir%\\system32\\ProvTool.exe",
+  "可设置小猫开始奔跑的阈值 cpu 与磁盘内存占用比",
   "npm cache clean --force\nnpm install --legacy-peer-deps\nnpm run serve",
   "\"C:\\Users\\18111\\Desktop\\toptop\\hunzhui_gui.py\"",
-  "%windir%\\system32\\ProvTool.exe",
   "https://www.bilibili.com/bangumi/play/ep6636728",
   "调试面板",
   "如果你想让它也「按名称」真正排好，我可以再帮你接一条路径：让应用触发前**临时让出焦点**给桌面来调排序菜单（会有短暂菜单闪现）",

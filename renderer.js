@@ -38,14 +38,10 @@ async function refreshTasks() {
     tr.innerHTML = `<td>${esc(displayName)}</td><td>${esc(opMap[t.op]||t.op||'未知')}</td><td>${esc(t.nextRun||'—')}</td><td style="${cmdCellStyle}" title="${cmdText?'点击复制命令代码':''}">${cmdText?esc(cmdText):'—'}</td><td></td>`;
     if (cmdText) {
       tr.children[3].onclick = async () => { await window.api.clipCopy(cmdText); showStatus('命令代码已复制', true); };
-      const copy = document.createElement('button');
-      copy.className = 'del-btn'; copy.style.color = '#2f855a'; copy.style.marginRight = '6px';
-      copy.textContent = '复制';
-      copy.onclick = async () => { await window.api.clipCopy(cmdText); showStatus('命令代码已复制', true); };
-      tr.children[4].appendChild(copy);
     }
     const del = document.createElement('button');
     del.className = 'del-btn'; del.textContent = '关闭';
+    del.style.cssText = 'height:28px;line-height:1;padding:0 12px;white-space:nowrap;vertical-align:middle';
     del.onclick = async () => {
       const r = await window.api.deleteTask(t.name);
       showStatus(r.message||r.error, r.ok);
@@ -115,8 +111,10 @@ function applyTheme(t) {
 $('btnTheme').onclick = () => {
   const next = document.body.dataset.theme === 'dark' ? '' : 'dark';
   applyTheme(next); localStorage.setItem('theme', next);
+  window.api.setTheme(next);
 };
 applyTheme(localStorage.getItem('theme') || '');
+window.api.setTheme(localStorage.getItem('theme') || '');
 
 // 下拉菜单
 $('btnDrop').onclick = (e) => { e.stopPropagation(); $('dropMenu').classList.toggle('show'); };
@@ -179,6 +177,8 @@ async function loadKey() {
   $('cmdDisabled').checked = !!cfg.cmdDisabled;
   $('launchAllKeyLabel').textContent = cfg.launchAllKey || 'Alt+A';
   $('launchAllDisabled').checked = !!cfg.launchAllDisabled;
+  $('desktopKeyLabel').textContent = cfg.desktopKey || 'Alt+I';
+  $('desktopDisabled').checked = !!cfg.desktopDisabled;
 }
 document.querySelectorAll('[data-edit]').forEach(btn => {
   btn.onclick = () => {
@@ -220,6 +220,7 @@ document.addEventListener('keydown', async (e) => {
   else if (captureTarget === 'hide') cfg.hideKey = newKey;
   else if (captureTarget === 'cmd') cfg.cmdKey = newKey;
   else if (captureTarget === 'launchAll') cfg.launchAllKey = newKey;
+  else if (captureTarget === 'desktop') cfg.desktopKey = newKey;
   await window.api.setConfig(cfg);
   $('shotKeyLabel').textContent = cfg.shotKey || 'Alt+Q';
   $('shotKeyHint').textContent = cfg.shotKey || 'Alt+Q';
@@ -231,6 +232,7 @@ document.addEventListener('keydown', async (e) => {
   $('hideKeyLabel').textContent = cfg.hideKey || 'Alt+2';
   $('cmdKeyLabel').textContent = cfg.cmdKey || 'Alt+R';
   $('launchAllKeyLabel').textContent = cfg.launchAllKey || 'Alt+A';
+  $('desktopKeyLabel').textContent = cfg.desktopKey || 'Alt+I';
   capturing = false;
   $('keyHint').style.display = 'none';
   document.querySelectorAll('[data-edit]').forEach(b => b.textContent = '修改');
@@ -291,6 +293,13 @@ $('launchAllDisabled').onchange = async () => {
   cfg.launchAllDisabled = $('launchAllDisabled').checked;
   await window.api.setConfig(cfg);
   showStatus(cfg.launchAllDisabled?'全部启动快捷键已禁用':'全部启动快捷键已启用', true);
+  window.api.refreshShortcuts();
+};
+$('desktopDisabled').onchange = async () => {
+  const cfg = await window.api.getConfig();
+  cfg.desktopDisabled = $('desktopDisabled').checked;
+  await window.api.setConfig(cfg);
+  showStatus(cfg.desktopDisabled?'显示桌面快捷键已禁用':'显示桌面快捷键已启用', true);
   window.api.refreshShortcuts();
 };
 loadKey();
@@ -371,6 +380,27 @@ $('btnAddQuick').onclick = async () => {
 $('quickInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnAddQuick').click(); });
 refreshQuick();
 
+// 点单元格就地编辑：Enter/失焦保存，Esc 取消
+function startEdit(td, idx, field) {
+  if (td.querySelector('input')) return;
+  const oldText = td.textContent;
+  td.textContent = '';
+  const input = document.createElement('input');
+  input.value = field === 'amount' ? parseFloat(oldText) : oldText;
+  input.style.cssText = 'width:100%;padding:0;margin:0;border:none;background:transparent;outline:none;color:var(--text);font-family:inherit;font-size:13px;line-height:1.4;box-shadow:inset 0 -1px 0 var(--accent)';
+  td.appendChild(input); input.focus(); input.select();
+  let done = false;
+  const commit = async () => {
+    if (done) return; done = true;
+    let v = input.value.trim();
+    if (field === 'amount') v = parseFloat(v);
+    if (field === 'amount' && isNaN(v)) { refreshNotes(); return; }
+    await window.api.notesUpdate(idx, { [field]: v });
+    refreshNotes();
+  };
+  input.onkeydown = (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { done = true; refreshNotes(); } };
+  input.onblur = commit;
+}
 // 记事板
 async function refreshNotes() {
   const list = await window.api.notesList();
@@ -391,11 +421,22 @@ async function refreshNotes() {
   sumEl.innerHTML = html;
   const el = $('noteList');
   el.innerHTML = '';
-  if (!list.length) { el.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#999;padding:12px">暂无记录</td></tr>'; return; }
-  list.forEach((n, i) => {
+  if (!list.length) { el.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:12px">暂无记录</td></tr>'; return; }
+  const indexed = list.map((n, i) => ({ n, i })).sort((a,b) => (b.n.date||'').localeCompare(a.n.date||''));
+  let lastDate = null;
+  indexed.forEach(({ n, i }) => {
+    const d = n.date || '无日期';
+    if (d !== lastDate) {
+      const htr = document.createElement('tr');
+      htr.innerHTML = `<td colspan="3" style="font-size:11px;color:var(--text-sub);padding:10px 0 3px;border-bottom:1px solid var(--border);font-weight:500">${d}</td>`;
+      el.appendChild(htr);
+      lastDate = d;
+    }
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td>${n.date||''}</td><td>${Number(n.amount).toFixed(2)}</td><td style="word-break:break-all">${n.desc||''}</td><td><button class="btn-gray" style="padding:2px 8px;font-size:11px">删</button></td>`;
-    tr.querySelector('button').onclick = async () => { await window.api.notesDel(i); refreshNotes(); };
+    tr.innerHTML = `<td style="white-space:nowrap;cursor:pointer;width:140px;overflow:hidden" class="cell-amount" title="点击修改">${Number(n.amount).toFixed(2)}</td><td style="word-break:break-all;cursor:pointer" class="cell-desc" title="点击修改">${n.desc||''}</td><td style="text-align:right;white-space:nowrap;width:40px"><button class="delBtn" style="padding:2px 4px;font-size:14px;color:#9b2c2c;background:none;border:none;cursor:pointer">×</button></td>`;
+    tr.querySelector('.delBtn').onclick = async () => { await window.api.notesDel(i); refreshNotes(); };
+    tr.querySelector('.cell-amount').onclick = (e) => startEdit(e.target, i, 'amount');
+    tr.querySelector('.cell-desc').onclick = (e) => startEdit(e.target, i, 'desc');
     el.appendChild(tr);
   });
 }
@@ -410,6 +451,105 @@ $('btnAddNote').onclick = async () => {
   showStatus('已添加', true);
 };
 refreshNotes();
+
+// 记事板 JSON 导出/导入
+$('btnNotesExport').onclick = async () => {
+  const r = await window.api.notesExport();
+  showStatus(r.ok ? ('已导出到 ' + r.path) : '已取消导出', r.ok);
+};
+$('btnNotesImport').onclick = async () => {
+  try {
+    const r = await window.api.notesPickImport();
+    if (!r || !r.ok) { showStatus('已取消导入', false); return; }
+    openImportModal(r.list, r.existing || []);
+  } catch (e) { showStatus('导入失败：' + e.message, false); }
+};
+function openImportModal(incoming, existing) {
+  if (!incoming || !incoming.length) { showStatus('文件为空，没有可导入的记录', false); return; }
+  const keyOf = (n) => [n.amount, n.date, n.desc].join('||');
+  const existKeys = new Set((existing || []).map(keyOf));
+  let dupCount = 0;
+  const listEl = $('importList'); listEl.innerHTML = '';
+  const grouped = {};
+  incoming.forEach((n, idx) => {
+    const d = n.date || '无日期';
+    if (!grouped[d]) grouped[d] = [];
+    grouped[d].push({ n, idx });
+  });
+  Object.keys(grouped).sort().reverse().forEach(d => {
+    const head = document.createElement('div');
+    head.textContent = d;
+    head.style.cssText = 'font-weight:600;font-size:12px;color:var(--text-sub);margin:10px 0 4px;padding-bottom:2px;border-bottom:1px solid var(--border)';
+    listEl.appendChild(head);
+    grouped[d].forEach(({ n, idx }) => {
+      const isDup = existKeys.has(keyOf(n));
+      if (isDup) dupCount++;
+      const row = document.createElement('label');
+      row.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:13px;cursor:pointer';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = !isDup; cb.disabled = isDup;
+      cb.dataset.idx = idx;
+      const text = document.createElement('span');
+      text.style.cssText = 'flex:1;color:var(--text)';
+      text.textContent = `${n.amount!=null?('¥'+n.amount):''}  ${n.desc||''}${n.time?'  ('+n.time+')':''}`;
+      if (isDup) { text.style.opacity = '0.55'; const tag = document.createElement('span'); tag.textContent='重复'; tag.style.cssText='color:#e53e3e;font-size:11px;margin-left:6px'; text.appendChild(tag); }
+      row.appendChild(cb); row.appendChild(text);
+      listEl.appendChild(row);
+    });
+  });
+  $('importDupHint').textContent = `共 ${incoming.length} 条，其中 ${dupCount} 条重复已自动取消勾选`;
+  window._importData = incoming;
+  $('importModal').style.display = 'flex';
+}
+$('btnImportCancel').onclick = () => { $('importModal').style.display = 'none'; window._importData = null; };
+$('btnImportConfirm').onclick = async () => {
+  const incoming = window._importData || [];
+  const chosen = [...document.querySelectorAll('#importList input[type=checkbox]:checked')].map(cb => incoming[Number(cb.dataset.idx)]);
+  $('importModal').style.display = 'none'; window._importData = null;
+  const r = await window.api.notesAppend(chosen);
+  refreshNotes();
+  showStatus(r.ok ? `已导入 ${r.added} 条` : '导入失败', r.ok);
+};
+window.addEventListener('dragover', (e) => { e.preventDefault(); });
+window.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  const f = e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (!/\.json$/i.test(f.name)) { showStatus('只能拖入 .json 文件', false); return; }
+  try {
+    const text = await f.text();
+    const arr = JSON.parse(text);
+    if (!Array.isArray(arr)) throw new Error('文件不是记录数组');
+    const existing = await window.api.notesList();
+    openImportModal(arr, existing);
+  } catch (err) { showStatus('导入失败：' + err.message, false); }
+});
+
+// 运行标准：奔跑速度倍率 + 三项开关
+(function(){
+  const input = $('catSpeedScale'), val = $('catSpeedScaleVal');
+  window.api.getConfig().then(c => {
+    const v = (c.catSpeedScale != null) ? c.catSpeedScale : 1;
+    input.value = v; val.textContent = v.toFixed(1) + 'x';
+  });
+  input.oninput = () => { val.textContent = Number(input.value).toFixed(1) + 'x'; };
+  input.onchange = async () => {
+    const c = await window.api.getConfig();
+    c.catSpeedScale = Number(input.value);
+    await window.api.setConfig(c);
+    showStatus(`奔跑速度 ${Number(input.value).toFixed(1)}x，即时生效`, true);
+  };
+  ['catUseCpu','catUseMem','catUseDisk'].forEach((id) => {
+    const el = $(id);
+    window.api.getConfig().then(c => { el.checked = (c[id] !== false); });
+    el.onchange = async () => {
+      const c = await window.api.getConfig();
+      c[id] = el.checked;
+      await window.api.setConfig(c);
+      showStatus((el.checked ? '已开启' : '已关闭') + id.replace('catUse',''), true);
+    };
+  });
+})();
 
 // 整理桌面
 async function loadOrganizeSetting() {

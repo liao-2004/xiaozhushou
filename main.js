@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, screen, desktopCapturer, nativeTheme } = require('electron');
+﻿const { app, BrowserWindow, Tray, Menu, globalShortcut, ipcMain, nativeImage, clipboard, screen, desktopCapturer, nativeTheme, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -75,14 +75,12 @@ function createWindow() {
   // mainWindow.webContents.openDevTools({ mode: 'bottom' });
 
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'cat_0.png')));
-  tray.setToolTip('定时开机机');
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: '显示窗口', click: () => showMainWindow() },
-    { label: '退出', click: () => { forceQuit = true; app.quit(); } }
-  ]));
+  tray.setToolTip('定时开关机');
+  refreshTrayMenu();
   tray.on('click', () => { mainWindow.isVisible() ? mainWindow.hide() : showMainWindow(); });
   tray.on('mouse-move', () => showFlyout());
-  tray.on('mouse-leave', () => scheduleHideFlyout());
+  tray.on('mouse-leave', () => { flyoutSuppressed = false; scheduleHideFlyout(); });
+  tray.on('right-click', () => { flyoutSuppressed = true; if (flyoutWindow && flyoutWindow.isVisible()) flyoutWindow.hide(); });
 
   mainWindow.on('close', (e) => {
     if (!forceQuit) { e.preventDefault(); mainWindow.hide(); }
@@ -123,6 +121,17 @@ function createWindow() {
       }
     }, 300);
   });
+}
+
+function refreshTrayMenu() {
+  const cfg = loadConfig();
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '显示窗口', click: () => showMainWindow() },
+    { type: 'checkbox', label: '开机自动启动', checked: isAutostartOn(), click: (it) => { setAutostart(it.checked); } },
+    { label: '图标常驻任务栏', click: () => exec('start ms-settings:taskbar') },
+    { type: 'separator' },
+    { label: '退出', click: () => { forceQuit = true; app.quit(); } }
+  ]));
 }
 
 function showMainWindow(center) {
@@ -187,6 +196,7 @@ function registerShortcuts() {
   if (!cfg.clipDisabled) { globalShortcut.register(cfg.clipKey || 'Alt+1', () => openClipPicker()); }
   if (!cfg.cmdDisabled) { globalShortcut.register(cfg.cmdKey || 'Alt+R', () => exec('start cmd')); }
   if (!cfg.launchAllDisabled) { globalShortcut.register(cfg.launchAllKey || 'Alt+A', () => { const l = loadLaunch(); l.forEach(item => { try { exec(`"${item.path}"`); } catch(e){} }); }); }
+  if (!cfg.desktopDisabled) { globalShortcut.register(cfg.desktopKey || 'Alt+I', () => { try { require('child_process').exec('powershell -NoProfile -Command "(New-Object -ComObject Shell.Application).MinimizeAll()"'); } catch(e){} }); }
 }
 
 // 剪贴板浮层
@@ -220,6 +230,8 @@ let flyoutWindow = null;
 let catFrame = 0;
 let animTimer = null;
 let hideFlyoutTimer = null;
+let flyoutSuppressed = false;
+let appTheme = (loadConfig().theme === 'dark') ? 'dark' : '';
 let lastSnapshot = { cpu: 0, mem: 0, disk: 0 };
 
 function cpuTimes() {
@@ -245,16 +257,15 @@ function diskPct() {
   return 0;
 }
 function currentFramePath() {
-  return path.join(__dirname, nativeTheme.shouldUseDarkColors ? `cat_white_${catFrame}.png` : `cat_${catFrame}.png`);
+  return path.join(__dirname, appTheme === 'dark' ? `cat_white_${catFrame}.png` : `cat_${catFrame}.png`);
 }
 function nextCatFrame() {
   catFrame = (catFrame + 1) % 5;
   try { tray.setImage(nativeImage.createFromPath(currentFramePath())); } catch(e) {}
 }
-function scheduleAnim(load) {
+function scheduleAnim(speedFactor) {
   if (animTimer) clearInterval(animTimer);
-  const speed = Math.max(1.0, load / 5.0);
-  animTimer = setInterval(nextCatFrame, Math.max(25, Math.round(500 / speed)));
+  animTimer = setInterval(nextCatFrame, Math.max(40, Math.round(600 / speedFactor)));
 }
 function pushSnapshot() {
   if (flyoutWindow && !flyoutWindow.isDestroyed() && flyoutWindow.isVisible()) {
@@ -262,6 +273,7 @@ function pushSnapshot() {
   }
 }
 function showFlyout() {
+  if (flyoutSuppressed) return;
   if (!flyoutWindow || flyoutWindow.isDestroyed()) {
     flyoutWindow = new BrowserWindow({
       width: 210, height: 128, frame: false, transparent: true, resizable: false,
@@ -274,12 +286,17 @@ function showFlyout() {
   if (hideFlyoutTimer) { clearTimeout(hideFlyoutTimer); hideFlyoutTimer = null; }
   const tb = tray.getBounds();
   const wa = screen.getDisplayMatching(tb).workArea; // {x,y,width,height}
-  let x = Math.round(tb.x + tb.width / 2 - 105);
-  x = Math.max(wa.x + 4, Math.min(x, wa.x + wa.width - 214));
-  let y = tb.y - 128 - 8;
+  const FW = 210, FH = 128;
+  let x = Math.round(tb.x + tb.width / 2 - FW / 2);
+  x = Math.max(wa.x + 4, Math.min(x, wa.x + wa.width - FW - 4));
+  let y = tb.y - FH - 8;
   if (y < wa.y) y = tb.y + tb.height + 8;
+  const maxY = wa.y + wa.height - FH - 4;
+  if (y > maxY) y = maxY;
+  if (y < wa.y + 4) y = wa.y + 4;
   if (!Number.isFinite(x) || !Number.isFinite(y)) { x = wa.x; y = wa.y; }
   flyoutWindow.setPosition(x, y);
+  flyoutWindow.setAlwaysOnTop(true, 'pop-up-menu');
   if (!flyoutWindow.isVisible()) flyoutWindow.showInactive();
   pushSnapshot();
 }
@@ -291,12 +308,20 @@ function startCatRunner() {
   prevCpu = cpuTimes();
   const win = [];
   setInterval(() => {
+    const cfg = loadConfig();
     const cpu = sampleCpuPct();
     win.push(cpu); if (win.length > 5) win.shift();
     const cpuAvg = win.reduce((a,b)=>a+b,0) / win.length;
     const mem = memPct();
-    lastSnapshot = { cpu: Math.round(cpuAvg), mem: Math.round(mem), disk: Math.round(diskPct()) };
-    scheduleAnim(Math.max(cpuAvg, mem));   // CPU 或内存高都跑起来
+    const disk = diskPct();
+    lastSnapshot = { cpu: Math.round(cpuAvg), mem: Math.round(mem), disk: Math.round(disk) };
+    const cands = [];
+    if (cfg.catUseCpu  !== false) cands.push(cpuAvg);
+    if (cfg.catUseMem  !== false) cands.push(mem);
+    if (cfg.catUseDisk !== false) cands.push(disk);
+    const load = cands.length ? Math.max(...cands) : 0;
+    const scale = Number(cfg.catSpeedScale) > 0 ? Number(cfg.catSpeedScale) : 1;
+    scheduleAnim((1 + load / 8) * scale);
     pushSnapshot();
   }, 1000);
   try { tray.setImage(nativeImage.createFromPath(currentFramePath())); } catch(e) {}
@@ -305,6 +330,12 @@ function startCatRunner() {
 // ============ IPC ============
 ipcMain.handle('config:get', () => loadConfig());
 ipcMain.handle('config:set', (_, cfg) => { saveConfig(cfg); return {ok:true}; });
+ipcMain.handle('theme:set', (_, t) => {
+  appTheme = (t === 'dark') ? 'dark' : '';
+  const cfg = loadConfig(); cfg.theme = appTheme; saveConfig(cfg);
+  try { tray.setImage(nativeImage.createFromPath(currentFramePath())); } catch(e) {}
+  return {ok:true};
+});
 ipcMain.handle('shortcuts:refresh', () => { registerShortcuts(); return {ok:true}; });
 ipcMain.handle('shortcuts:suspend', () => { globalShortcut.unregisterAll(); return {ok:true}; });
 ipcMain.handle('window:minimize', () => mainWindow.minimize());
@@ -471,6 +502,32 @@ ipcMain.handle('quick:del', (_, i) => { const l = loadQuick(); l.splice(i,1); sa
 ipcMain.handle('notes:list', () => loadNotes());
 ipcMain.handle('notes:add', (_, item) => { const l = loadNotes(); l.unshift(item); saveNotes(l); return {ok:true, list:l}; });
 ipcMain.handle('notes:del', (_, i) => { const l = loadNotes(); l.splice(i,1); saveNotes(l); return {ok:true, list:l}; });
+ipcMain.handle('notes:update', (_, i, item) => { const l = loadNotes(); if (i>=0 && i<l.length) l[i] = Object.assign({}, l[i], item); saveNotes(l); return {ok:true, list:l}; });
+ipcMain.handle('notes:export', async () => {
+  const { canceled, filePath } = await dialog.showSaveDialog({ defaultPath: 'notes.json', filters: [{ name: 'JSON 文件', extensions: ['json'] }] });
+  if (canceled || !filePath) return { ok: false };
+  fs.writeFileSync(filePath, JSON.stringify(loadNotes(), null, 2), 'utf8');
+  return { ok: true, path: filePath };
+});
+ipcMain.handle('notes:pickImport', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'JSON 文件', extensions: ['json'] }] });
+  if (canceled || !filePaths || !filePaths[0]) return { ok: false };
+  const arr = JSON.parse(fs.readFileSync(filePaths[0], 'utf8'));
+  if (!Array.isArray(arr)) throw new Error('文件不是记录数组');
+  return { ok: true, list: arr, existing: loadNotes() };
+});
+ipcMain.handle('notes:append', (_, arr) => {
+  if (!Array.isArray(arr)) return { ok: false };
+  const exist = loadNotes();
+  const keyOf = (n) => [n.amount, n.date, n.desc].join('||');
+  const existKeys = new Set(exist.map(keyOf));
+  let added = 0;
+  for (const n of arr) {
+    if (!existKeys.has(keyOf(n))) { exist.unshift(n); existKeys.add(keyOf(n)); added++; }
+  }
+  saveNotes(exist);
+  return { ok: true, added, list: exist };
+});
 
 ipcMain.handle('organize:run', (_, {arrangeMode, moveFiles, dirShortcut, dirFolder, dirFile}) => {
   try {

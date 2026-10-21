@@ -144,6 +144,7 @@
       <div class="tab" data-page="page-note"><span>记事板</span></div>
       <div class="tab" data-page="page-desktop"><span>整理桌面</span></div>
       <div class="tab" data-page="page-tasks"><span>任务列表</span></div>
+      <div class="tab" data-page="page-runcriteria"><span>运行标准</span></div>
       <div class="tab" data-page="page-settings"><span>设置</span></div>
     </div>
 
@@ -265,10 +266,14 @@
           <div class="btn-row"><button class="btn-primary" id="btnAddNote">添加记录</button></div>
         </div>
         <div class="card" style="margin-top:12px">
-          <h2>统计</h2>
+          <h2 style="display:flex;align-items:center;justify-content:space-between">统计
+            <span>
+              <button class="btn-secondary" id="btnNotesExport" style="margin-right:6px">导出 JSON</button>
+              <button class="btn-secondary" id="btnNotesImport">导入 JSON</button>
+            </span>
+          </h2>
           <div id="noteSummary" style="margin-bottom:10px"></div>
-          <table>
-            <thead><tr><th>日期</th><th>数值</th><th>事件</th><th>操作</th></tr></thead>
+          <table style="table-layout:fixed">
             <tbody id="noteList"></tbody>
           </table>
         </div>
@@ -319,6 +324,24 @@
         </div>
       </div>
 
+      <!-- 运行标准 -->
+      <div class="page" id="page-runcriteria">
+        <div class="card">
+          <h2>小猫奔跑速度</h2>
+          <div class="row" style="align-items:center;margin-bottom:16px;margin-top:6px">
+            <label style="width:90px;flex-shrink:0">奔跑速度</label>
+            <input type="range" id="catSpeedScale" min="0.5" max="3" step="0.1" class="cat-slider">
+            <span id="catSpeedScaleVal" class="cat-val">1.0x</span>
+          </div>
+          <div class="row" style="gap:18px;margin-bottom:14px;font-size:13px">
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="catUseCpu" checked> 按 CPU</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="catUseMem" checked> 按内存</label>
+            <label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="catUseDisk" checked> 按磁盘</label>
+          </div>
+          <div class="hint">勾选哪些项，猫就根据那些占用里最高的一项加速；全部取消则保持慢走。速度滑块是整体倍率。</div>
+        </div>
+      </div>
+
       <!-- 设置 -->
       <div class="page" id="page-settings">
         <div class="card">
@@ -344,10 +367,25 @@
               <tr><td>放回后台</td><td><code id="hideKeyLabel">Alt+2</code></td><td>隐藏窗口到托盘</td><td><input type="checkbox" id="hideDisabled"></td><td><button class="btn-gray" data-edit="hide">修改</button></td></tr>
               <tr><td>打开CMD</td><td><code id="cmdKeyLabel">Alt+R</code></td><td>打开命令提示符</td><td><input type="checkbox" id="cmdDisabled"></td><td><button class="btn-gray" data-edit="cmd">修改</button></td></tr>
               <tr><td>全部启动</td><td><code id="launchAllKeyLabel">Alt+A</code></td><td>打开快捷启动里所有软件</td><td><input type="checkbox" id="launchAllDisabled"></td><td><button class="btn-gray" data-edit="launchAll">修改</button></td></tr>
+              <tr><td>显示桌面</td><td><code id="desktopKeyLabel">Alt+I</code></td><td>最小化所有窗口回到桌面</td><td><input type="checkbox" id="desktopDisabled"></td><td><button class="btn-gray" data-edit="desktop">修改</button></td></tr>
             </tbody>
           </table>
           <div class="hint" id="keyHint" style="display:none">请按下新的组合键（如 Ctrl+A）...</div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 记事板导入选择弹窗 -->
+  <div id="importModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:999;align-items:center;justify-content:center">
+    <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;width:520px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:600">选择要导入的记录
+        <span id="importDupHint" style="font-weight:400;font-size:12px;color:var(--text-sub);margin-left:8px"></span>
+      </div>
+      <div id="importList" style="overflow:auto;padding:10px 18px;flex:1"></div>
+      <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px">
+        <button class="btn-gray" id="btnImportCancel">取消</button>
+        <button class="btn-primary" id="btnImportConfirm">导入所选</button>
       </div>
     </div>
   </div>
