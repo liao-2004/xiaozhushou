@@ -1,7 +1,17 @@
 # 依赖目录
 node_modules/
 
+# 打包产物
+release/
+dist/
+
+# 日志
+*.log
+npm-debug.log*
+
 # 系统/编辑器垃圾文件
 .DS_Store
 Thumbs.db
 desktop.ini
+.idea/
+.vscode/
