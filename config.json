@@ -1,0 +1,20 @@
+{
+  "shotKey": "Alt+Q",
+  "shotDisabled": false,
+  "altPicker": true,
+  "openDisabled": false,
+  "hibDisabled": false,
+  "shutdownKey": "Alt+P",
+  "shutdownDisabled": false,
+  "clipKey": "Alt+1",
+  "hideDisabled": false,
+  "organizeMode": "date",
+  "autoOrganize": false,
+  "moveFiles": true,
+  "arrangeMode": "name",
+  "dirShortcut": "",
+  "dirFolder": "",
+  "dirFile": "文件",
+  "hibKey": "Alt+O",
+  "launchAllKey": "Alt+W"
+}

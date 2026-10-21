@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:210px; height:128px; }
+  body {
+    font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    background: transparent;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card {
+    width:198px; padding:12px 14px; border-radius:10px;
+    background:#F9F9F9; box-shadow:0 4px 16px rgba(0,0,0,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    .card { background:#2C2C2C; }
+  }
+  .row { margin-bottom:10px; }
+  .row:last-child { margin-bottom:0; }
+  .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:5px; }
+  .label { font-size:11px; color:#868686; }
+  @media (prefers-color-scheme: dark){ .label { color:#A0A0A0; } }
+  .value { font-size:15px; font-weight:600; color:#1B1B1B; }
+  @media (prefers-color-scheme: dark){ .value { color:#F0F0F0; } }
+  .track { height:3px; border-radius:2px; background:#E6E6E6; overflow:hidden; }
+  @media (prefers-color-scheme: dark){ .track { background:#3C3C3C; } }
+  .fill { height:100%; width:0%; background:#1B1B1B; border-radius:2px; transition:width .6s ease; }
+  @media (prefers-color-scheme: dark){ .fill { background:#F0F0F0; } }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="row">
+      <div class="top"><span class="label">CPU</span><span class="value" id="v0">—</span></div>
+      <div class="track"><div class="fill" id="b0"></div></div>
+    </div>
+    <div class="row">
+      <div class="top"><span class="label">内存</span><span class="value" id="v1">—</span></div>
+      <div class="track"><div class="fill" id="b1"></div></div>
+    </div>
+    <div class="row">
+      <div class="top"><span class="label">磁盘</span><span class="value" id="v2">—</span></div>
+      <div class="track"><div class="fill" id="b2"></div></div>
+    </div>
+  </div>
+<script>
+  window.onSnapshot(({cpu, mem, disk}) => {
+    const vals = [cpu, mem, disk];
+    vals.forEach((v, i) => {
+      document.getElementById('v'+i).textContent = (v == null ? '—' : v + '%');
+      document.getElementById('b'+i).style.width = Math.max(0, Math.min(100, v||0)) + '%';
+    });
+  });
+</script>
+</body>
+</html>

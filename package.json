@@ -1,0 +1,53 @@
+{
+  "name": "onoff-scheduler",
+  "version": "1.0.0",
+  "description": "电脑工具",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.local.onoff.scheduler",
+    "productName": "OnOffScheduler",
+    "asar": false,
+    "npmRebuild": false,
+    "files": [
+      "main.js",
+      "preload.js",
+      "shot-preload.js",
+      "clip-preload.js",
+      "flyout-preload.js",
+      "renderer.js",
+      "index.html",
+      "icon.html",
+      "shot.html",
+      "clip.html",
+      "flyout.html",
+      "logo.svg",
+      "app-icon.png",
+      "cat_*.png",
+      "config.json",
+      "notes.json",
+      "quick_input.json",
+      "launch_list.json",
+      "clip_history.json",
+      "custom_tasks/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "app-icon.png",
+      "signAndEditExecutable": false
+    }
+  }
+}

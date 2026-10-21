@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>截图标注</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:rgba(0,0,0,0.3); overflow:hidden; font-family:"Microsoft YaHei",sans-serif; user-select:none; margin:0; padding:0; }
+  canvas { display:block; cursor:crosshair; width:100vw; height:100vh; }
+  .toolbar { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#fff; border-radius:8px; padding:6px; display:flex; gap:4px; box-shadow:0 4px 16px rgba(0,0,0,0.2); z-index:100; }
+  .tool { padding:8px 12px; border-radius:6px; cursor:pointer; font-size:13px; color:#4a5568; border:none; background:transparent; }
+  .tool:hover { background:#f1f2f6; }
+  .tool.active { background:#4a5568; color:#fff; }
+  .tool.primary { background:#4a5568; color:#fff; }
+  .tool.danger { color:#c53030; }
+  .hint { position:fixed; top:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.7); color:#fff; padding:8px 16px; border-radius:6px; font-size:13px; z-index:100; }
+</style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div class="hint">拖拽选择裁剪区域，选区内可标注，确认后保存</div>
+  <div class="toolbar">
+    <button class="tool active" data-tool="crop">裁剪</button>
+    <button class="tool" data-tool="arrow">箭头</button>
+    <button class="tool" data-tool="rect">矩形</button>
+    <button class="tool" data-tool="pen">画笔</button>
+    <button class="tool" data-tool="undo">撤销</button>
+    <button class="tool danger" id="btnCancel">取消</button>
+    <button class="tool primary" id="btnSave">保存</button>
+  </div>
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let img = new Image();
+let currentTool = 'crop';
+let selecting = false;
+let startX=0, startY=0, selX=0, selY=0, selW=0, selH=0;
+let shapes = [], drawing = false;
+
+window.shotApi.onImage((dataUrl) => {
+  img.onload = () => { canvas.width=img.width; canvas.height=img.height; redraw(); };
+  img.src = dataUrl;
+});
+
+function redraw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(img,0,0,canvas.width,canvas.height);
+  shapes.forEach(s=>drawShape(s));
+  if (selW>0 && selH>0) {
+    ctx.strokeStyle='#0984e3'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.strokeRect(selX,selY,selW,selH); ctx.setLineDash([]);
+    ctx.fillStyle='rgba(0,0,0,0.4)';
+    ctx.fillRect(0,0,canvas.width,selY);
+    ctx.fillRect(0,selY+selH,canvas.width,canvas.height-selY-selH);
+    ctx.fillRect(0,selY,selX,selH);
+    ctx.fillRect(selX+selW,selY,canvas.width-selX-selW,selH);
+  }
+}
+// 鼠标坐标(CSS像素) -> canvas物理像素
+function toCanvas(e){
+  const r=canvas.getBoundingClientRect();
+  return {
+    x:(e.clientX-r.left)*(canvas.width/r.width),
+    y:(e.clientY-r.top)*(canvas.height/r.height)
+  };
+}
+function drawShape(s) {
+  ctx.strokeStyle=s.color||'#e74c3c'; ctx.lineWidth=s.width||2;
+  if (s.type==='arrow') drawArrow(s.x1,s.y1,s.x2,s.y2);
+  else if (s.type==='rect') ctx.strokeRect(s.x1,s.y1,s.x2-s.x1,s.y2-s.y1);
+  else if (s.type==='pen') { ctx.beginPath(); ctx.moveTo(s.x1,s.y1); ctx.lineTo(s.x2,s.y2); ctx.stroke(); }
+}
+function drawArrow(x1,y1,x2,y2) {
+  const l=12, a=Math.atan2(y2-y1,x2-x1);
+  ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x2,y2);
+  ctx.lineTo(x2-l*Math.cos(a-Math.PI/6), y2-l*Math.sin(a-Math.PI/6));
+  ctx.lineTo(x2-l*Math.cos(a+Math.PI/6), y2-l*Math.sin(a+Math.PI/6));
+  ctx.closePath(); ctx.fillStyle='#e74c3c'; ctx.fill();
+}
+canvas.addEventListener('mousedown',e=>{
+  const {x,y}=toCanvas(e);
+  if (currentTool==='crop') { selecting=true; startX=x; startY=y; selX=x; selY=y; selW=0; selH=0; }
+  else { drawing=true; shapes.push({type:currentTool,x1:x,y1:y,x2:x,y2:y,color:'#e74c3c',width:2}); }
+});
+canvas.addEventListener('mousemove',e=>{
+  const {x,y}=toCanvas(e);
+  if (selecting) { selX=Math.min(startX,x); selY=Math.min(startY,y); selW=Math.abs(x-startX); selH=Math.abs(y-startY); redraw(); }
+  else if (drawing && shapes.length) { const s=shapes[shapes.length-1]; s.x2=x; s.y2=y; redraw(); }
+});
+canvas.addEventListener('mouseup',()=>{selecting=false; drawing=false;});
+document.querySelectorAll('.tool[data-tool]').forEach(b=>{
+  b.onclick=()=>{
+    if (b.dataset.tool==='undo') { shapes.pop(); redraw(); return; }
+    document.querySelectorAll('.tool').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); currentTool=b.dataset.tool;
+  };
+});
+document.getElementById('btnCancel').onclick=()=>window.shotApi.cancel();
+document.getElementById('btnSave').onclick=()=>{
+  const clean=document.createElement('canvas');
+  clean.width=img.width; clean.height=img.height;
+  const cctx=clean.getContext('2d');
+  cctx.drawImage(img,0,0); shapes.forEach(s=>drawShape.call({ctx:cctx},s));
+  let exp=clean;
+  if (selW>10&&selH>10) {
+    exp=document.createElement('canvas'); exp.width=selW; exp.height=selH;
+    exp.getContext('2d').drawImage(clean,selX,selY,selW,selH,0,0,selW,selH);
+  }
+  window.shotApi.save(exp.toDataURL('image/png'));
+  window.shotApi.cancel();
+};
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape') window.shotApi.cancel();
+  if(e.key==='Enter') document.getElementById('btnSave').click();
+});
+</script>
+</body>
+</html>

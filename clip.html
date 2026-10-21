@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>剪贴板选择</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { overflow:hidden; }
+  body { background:transparent; font-family:"Microsoft YaHei",sans-serif; user-select:none; }
+  .box { background:transparent; border-radius:10px; overflow:hidden; width:100%; }
+  .head { padding:10px 14px; font-size:12px; color:#666; border-bottom:1px solid #eee; background:#fafafa; }
+  .list-wrap { position:relative; height:260px; overflow:hidden;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%);
+  }
+  .highlighter { position:absolute; top:50%; left:0; right:0; height:36px; transform:translateY(-50%); background:rgba(74,85,104,1); border-radius:6px; z-index:1; pointer-events:none; opacity:1; }
+  .list { position:relative; z-index:2; transition:transform 0.05s; }
+  .item { height:36px; line-height:36px; padding:0 14px; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#000; }
+  .empty { padding:30px; text-align:center; color:#999; font-size:12px; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="list-wrap">
+      <div class="highlighter"></div>
+      <div class="list" id="list"></div>
+    </div>
+  </div>
+<script>
+let items = [];
+let idx = 0;
+const ITEM_H = 36;
+const VISIBLE = 7;
+async function load() {
+  const [history, quick] = await Promise.all([
+    window.clipApi.list(),
+    window.clipApi.quickList()
+  ]);
+  // 快捷输入在前，历史在后
+  items = [
+    ...quick.map(t => ({ text: t, quick: true })),
+    ...history.map(h => ({ text: h, quick: false }))
+  ];
+  render();
+}
+function maxIdx() { return items.length - 1; }
+function render() {
+  const el = document.getElementById('list');
+  el.innerHTML = '';
+  if (!items.length) { el.innerHTML = '<div class="empty">暂无记录，先复制点内容</div>'; return; }
+  items.forEach((it,i) => {
+    const d = document.createElement('div');
+    d.className = 'item';
+    d.textContent = it.text || '(空)';
+    if (it.quick) d.style.textDecoration = 'underline';
+    // 中间选中项 100%，向上下两端依次递减到 20%
+    const dist = Math.abs(i - idx);
+    d.style.opacity = String(Math.max(0.2, 1 - dist * 0.2667));
+    el.appendChild(d);
+  });
+  idx = Math.max(0, Math.min(idx, maxIdx()));
+  // 选中项居中；记录少时从顶部开始，不强行居中
+  let offset;
+  if (items.length <= VISIBLE) {
+    offset = (VISIBLE/2 - 0.5 - idx) * ITEM_H;
+  } else {
+    offset = (VISIBLE/2 - 0.5 - idx) * ITEM_H;
+  }
+  el.style.transform = `translateY(${offset}px)`;
+}
+// 滚轮选择高亮
+document.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.deltaY > 0) idx = Math.min(maxIdx(), idx+1);
+  else idx = Math.max(0, idx-1);
+  render();
+}, { passive:false });
+// 松开Alt/Ctrl/Shift键关闭并粘贴输出
+document.addEventListener('keyup', (e) => {
+  if (e.key === 'Alt' || e.key === 'Control' || e.key === 'Shift') {
+    if (items[idx]) {
+      window.clipApi.paste(items[idx].text);
+    } else {
+      window.close();
+    }
+  }
+});
+// 鼠标移出浮层范围：直接关闭，不复制不粘贴
+document.body.addEventListener('mouseleave', () => {
+  window.close();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key==='ArrowUp') { e.preventDefault(); idx=Math.max(0,idx-1); render(); }
+  else if (e.key==='ArrowDown') { e.preventDefault(); idx=Math.min(maxIdx(),idx+1); render(); }
+  else if (e.key==='Enter') { e.preventDefault(); if(items[idx]) window.clipApi.paste(items[idx].text); else window.close(); }
+  else if (e.key==='Escape') { window.close(); }
+});
+load();
+</script>
+</body>
+</html>
