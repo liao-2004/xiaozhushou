@@ -14,7 +14,7 @@
     mask-image: linear-gradient(to bottom, transparent 0%, black 30%, black 70%, transparent 100%);
   }
   .highlighter { position:absolute; top:50%; left:0; right:0; height:36px; transform:translateY(-50%); background:rgba(74,85,104,1); border-radius:6px; z-index:1; pointer-events:none; opacity:1; }
-  .list { position:relative; z-index:2; transition:transform 0.05s; }
+  .list { position:relative; z-index:2; transition:transform 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
   .item { height:36px; line-height:36px; padding:0 14px; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#000; }
   .empty { padding:30px; text-align:center; color:#999; font-size:12px; }
 </style>
@@ -68,13 +68,18 @@ function render() {
   }
   el.style.transform = `translateY(${offset}px)`;
 }
-// 滚轮选择高亮
+// 滚轮选择高亮（带累积惯性）
+let wheelAcc = 0;
 document.addEventListener('wheel', (e) => {
   e.preventDefault();
   e.stopPropagation();
-  if (e.deltaY > 0) idx = Math.min(maxIdx(), idx+1);
-  else idx = Math.max(0, idx-1);
-  render();
+  wheelAcc += e.deltaY;
+  const step = Math.trunc(wheelAcc / 60);
+  if (step !== 0) {
+    idx = Math.max(0, Math.min(maxIdx(), idx + step));
+    wheelAcc -= step * 60;
+    render();
+  }
 }, { passive:false });
 // 松开Alt/Ctrl/Shift键关闭并粘贴输出
 document.addEventListener('keyup', (e) => {
