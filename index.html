@@ -112,6 +112,20 @@
   textarea::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
   textarea::-webkit-scrollbar-thumb:hover { background:var(--text-sub); }
   code { background:var(--code-bg); padding:1px 5px; border-radius:3px; font-family:Consolas,monospace; font-size:12px; }
+  /* 图标运行页滑块：主题色轨道 + 白色圆点，已选部分由 JS 填充 */
+  .cat-slider {
+    -webkit-appearance:none; appearance:none;
+    width:170px; height:6px; border-radius:3px; outline:none;
+    background:var(--border);
+  }
+  .cat-slider::-webkit-slider-thumb {
+    -webkit-appearance:none; appearance:none;
+    width:16px; height:16px; border-radius:50%;
+    background:#fff; border:2px solid var(--accent);
+    margin-top:-5px; box-shadow:0 1px 3px rgba(0,0,0,0.25); cursor:pointer;
+  }
+  /* 记事板就地编辑：contenteditable 单元格可选中文字，编辑态加下划线提示 */
+  td[contenteditable="true"] { user-select:text; -webkit-user-select:text; outline:none; box-shadow:inset 0 -1px 0 var(--accent); }
 </style>
 </head>
 <body>
@@ -144,7 +158,7 @@
       <div class="tab" data-page="page-note"><span>记事板</span></div>
       <div class="tab" data-page="page-desktop"><span>整理桌面</span></div>
       <div class="tab" data-page="page-tasks"><span>任务列表</span></div>
-      <div class="tab" data-page="page-runcriteria"><span>运行标准</span></div>
+      <div class="tab" data-page="page-runcriteria"><span>图标运行</span></div>
       <div class="tab" data-page="page-settings"><span>设置</span></div>
     </div>
 

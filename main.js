@@ -67,6 +67,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 600, height: 500, minWidth: 200, minHeight: 200,
     frame: false, transparent: false, alwaysOnTop: true, paintWhenInitiallyHidden: true,
+    show: false,
     backgroundColor: '#ffffff',
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false }
   });
@@ -121,6 +122,19 @@ function createWindow() {
       }
     }, 300);
   });
+}
+
+// 开机自启动：托盘右键菜单使用（对应 IPC 的 autostart:get / autostart:set）
+const RUN_KEY = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+function isAutostartOn() {
+  try { return execSync('reg query "' + RUN_KEY + '" /v OnOffScheduler').toString().includes('OnOffScheduler'); }
+  catch(e) { return false; }
+}
+function setAutostart(enable) {
+  try {
+    if (enable) execSync('reg add "' + RUN_KEY + '" /v OnOffScheduler /t REG_SZ /d "\\"' + process.execPath + '\\"" /f');
+    else execSync('reg delete "' + RUN_KEY + '" /v OnOffScheduler /f 2>nul');
+  } catch(e) {}
 }
 
 function refreshTrayMenu() {

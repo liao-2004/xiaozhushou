@@ -16,5 +16,9 @@
   "dirFolder": "",
   "dirFile": "文件",
   "hibKey": "Alt+O",
-  "launchAllKey": "Alt+W"
+  "launchAllKey": "Alt+W",
+  "theme": "dark",
+  "catSpeedScale": 1,
+  "catUseDisk": false,
+  "catUseCpu": false
 }

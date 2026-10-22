@@ -380,26 +380,32 @@ $('btnAddQuick').onclick = async () => {
 $('quickInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnAddQuick').click(); });
 refreshQuick();
 
-// 点单元格就地编辑：Enter/失焦保存，Esc 取消
+// 点单元格就地编辑：直接在该格文字上改（contenteditable，不出输入框），Enter/失焦保存，Esc 取消
 function startEdit(td, idx, field) {
-  if (td.querySelector('input')) return;
-  const oldText = td.textContent;
-  td.textContent = '';
-  const input = document.createElement('input');
-  input.value = field === 'amount' ? parseFloat(oldText) : oldText;
-  input.style.cssText = 'width:100%;padding:0;margin:0;border:none;background:transparent;outline:none;color:var(--text);font-family:inherit;font-size:13px;line-height:1.4;box-shadow:inset 0 -1px 0 var(--accent)';
-  td.appendChild(input); input.focus(); input.select();
+  if (td.getAttribute('contenteditable') === 'true') return;
+  const oldVal = field === 'amount' ? parseFloat(td.textContent) : (td.textContent || '').trim();
+  td.setAttribute('contenteditable', 'true');
+  td.focus();
+  const range = document.createRange();
+  range.selectNodeContents(td);
+  const sel = window.getSelection();
+  sel.removeAllRanges(); sel.addRange(range);
   let done = false;
   const commit = async () => {
     if (done) return; done = true;
-    let v = input.value.trim();
+    td.removeAttribute('contenteditable');
+    let v = (td.textContent || '').replace(/\n/g, '').trim();
     if (field === 'amount') v = parseFloat(v);
     if (field === 'amount' && isNaN(v)) { refreshNotes(); return; }
+    if (v === oldVal) return; // 未改动则不保存
     await window.api.notesUpdate(idx, { [field]: v });
     refreshNotes();
   };
-  input.onkeydown = (e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { done = true; refreshNotes(); } };
-  input.onblur = commit;
+  td.onkeydown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { done = true; td.removeAttribute('contenteditable'); refreshNotes(); }
+  };
+  td.onblur = commit;
 }
 // 记事板
 async function refreshNotes() {
@@ -421,19 +427,21 @@ async function refreshNotes() {
   sumEl.innerHTML = html;
   const el = $('noteList');
   el.innerHTML = '';
-  if (!list.length) { el.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:12px">暂无记录</td></tr>'; return; }
+  if (!list.length) { el.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#999;padding:12px;border:none">暂无记录</td></tr>'; return; }
   const indexed = list.map((n, i) => ({ n, i })).sort((a,b) => (b.n.date||'').localeCompare(a.n.date||''));
   let lastDate = null;
   indexed.forEach(({ n, i }) => {
     const d = n.date || '无日期';
     if (d !== lastDate) {
+      // 日期作分类分隔：小字号 + 下划线，与下方数据分开
       const htr = document.createElement('tr');
-      htr.innerHTML = `<td colspan="3" style="font-size:11px;color:var(--text-sub);padding:10px 0 3px;border-bottom:1px solid var(--border);font-weight:500">${d}</td>`;
+      htr.innerHTML = `<td colspan="3" style="font-size:10px;color:var(--text-sub);padding:10px 0 3px;border-bottom:1px solid var(--border);font-weight:400">${d}</td>`;
       el.appendChild(htr);
       lastDate = d;
     }
+    // 数据行：无边框更清爽；金额/事件可点击就地编辑
     const tr = document.createElement('tr');
-    tr.innerHTML = `<td style="white-space:nowrap;cursor:pointer;width:140px;overflow:hidden" class="cell-amount" title="点击修改">${Number(n.amount).toFixed(2)}</td><td style="word-break:break-all;cursor:pointer" class="cell-desc" title="点击修改">${n.desc||''}</td><td style="text-align:right;white-space:nowrap;width:40px"><button class="delBtn" style="padding:2px 4px;font-size:14px;color:#9b2c2c;background:none;border:none;cursor:pointer">×</button></td>`;
+    tr.innerHTML = `<td class="cell-amount" title="点击修改" style="white-space:nowrap;width:110px;border:none;color:var(--accent);font-weight:500;cursor:text">${Number(n.amount).toFixed(2)}</td><td class="cell-desc" title="点击修改" style="word-break:break-all;border:none;cursor:text">${n.desc||''}</td><td style="text-align:right;white-space:nowrap;width:40px;border:none"><button class="delBtn" style="padding:2px 4px;font-size:14px;color:#9b2c2c;background:none;border:none;cursor:pointer">×</button></td>`;
     tr.querySelector('.delBtn').onclick = async () => { await window.api.notesDel(i); refreshNotes(); };
     tr.querySelector('.cell-amount').onclick = (e) => startEdit(e.target, i, 'amount');
     tr.querySelector('.cell-desc').onclick = (e) => startEdit(e.target, i, 'desc');
@@ -525,14 +533,20 @@ window.addEventListener('drop', async (e) => {
   } catch (err) { showStatus('导入失败：' + err.message, false); }
 });
 
-// 运行标准：奔跑速度倍率 + 三项开关
+// 图标运行：奔跑速度倍率 + 三项开关
 (function(){
   const input = $('catSpeedScale'), val = $('catSpeedScaleVal');
+  // 按滑块当前位置填充轨道已选部分（主题色）
+  const paint = () => {
+    const min = +input.min || 0, max = +input.max || 100;
+    const pct = Math.max(0, Math.min(100, ((+input.value - min) / (max - min)) * 100));
+    input.style.background = `linear-gradient(to right, var(--accent) 0%, var(--accent) ${pct}%, var(--border) ${pct}%, var(--border) 100%)`;
+  };
   window.api.getConfig().then(c => {
     const v = (c.catSpeedScale != null) ? c.catSpeedScale : 1;
-    input.value = v; val.textContent = v.toFixed(1) + 'x';
+    input.value = v; val.textContent = v.toFixed(1) + 'x'; paint();
   });
-  input.oninput = () => { val.textContent = Number(input.value).toFixed(1) + 'x'; };
+  input.oninput = () => { val.textContent = Number(input.value).toFixed(1) + 'x'; paint(); };
   input.onchange = async () => {
     const c = await window.api.getConfig();
     c.catSpeedScale = Number(input.value);
