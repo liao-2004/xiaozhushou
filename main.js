@@ -15,8 +15,17 @@ let mainWindow, tray, shotWindow, clipPickerWindow;
 let forceQuit = false;
 const desktopPath = path.join(app.getPath('home'), 'Desktop');
 
-// 配置文件
-const configFile = path.join(__dirname, 'config.json');
+// 配置文件：写到用户目录（Program Files 下无写权限），首启从打包默认值复制
+const DATA_DIR = app.getPath('userData');
+try { fs.mkdirSync(DATA_DIR, { recursive: true }); } catch(e) {}
+function dataFile(name) {
+  const p = path.join(DATA_DIR, name);
+  if (!fs.existsSync(p)) {
+    try { fs.copyFileSync(path.join(__dirname, name), p); } catch(e) {}
+  }
+  return p;
+}
+const configFile = dataFile('config.json');
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(configFile, 'utf8')); }
   catch (e) { return {}; }
@@ -24,23 +33,23 @@ function loadConfig() {
 function saveConfig(cfg) { fs.writeFileSync(configFile, JSON.stringify(cfg, null, 2), 'utf8'); }
 
 // 记事板
-const noteFile = path.join(__dirname, 'notes.json');
+const noteFile = dataFile('notes.json');
 function loadNotes() { try { return JSON.parse(fs.readFileSync(noteFile, 'utf8')); } catch(e) { return []; } }
 function saveNotes(list) { fs.writeFileSync(noteFile, JSON.stringify(list, null, 2), 'utf8'); }
 
 // 快捷输入
-const quickFile = path.join(__dirname, 'quick_input.json');
+const quickFile = dataFile('quick_input.json');
 function loadQuick() { try { return JSON.parse(fs.readFileSync(quickFile, 'utf8')); } catch(e) { return []; } }
 function saveQuick(list) { fs.writeFileSync(quickFile, JSON.stringify(list, null, 2), 'utf8'); }
 
 // 剪贴板历史
-const clipFile = path.join(__dirname, 'clip_history.json');
+const clipFile = dataFile('clip_history.json');
 let lastClipText = '';
 function loadClip() { try { return JSON.parse(fs.readFileSync(clipFile, 'utf8')); } catch(e) { return []; } }
 function saveClip(list) { fs.writeFileSync(clipFile, JSON.stringify(list, null, 2), 'utf8'); }
 
 // 快捷启动
-const launchFile = path.join(__dirname, 'launch_list.json');
+const launchFile = dataFile('launch_list.json');
 function loadLaunch() { try { return JSON.parse(fs.readFileSync(launchFile, 'utf8')); } catch(e) { return []; } }
 function saveLaunch(list) { fs.writeFileSync(launchFile, JSON.stringify(list, null, 2), 'utf8'); }
 
