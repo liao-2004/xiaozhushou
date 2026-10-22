@@ -3,6 +3,18 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { exec, execSync, spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
+// 手动检查更新：只在用户点托盘「检查更新」时触发
+function checkUpdateManual() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  autoUpdater.once('update-not-available', () => dialog.showMessageBox({ type:'info', message:'当前已是最新版本' }));
+  autoUpdater.once('update-available', (info) => dialog.showMessageBox({ type:'info', message:`发现新版本 v${info.version}，开始后台下载` }));
+  autoUpdater.once('update-downloaded', (info) => {
+    dialog.showMessageBox({ type:'info', message:`v${info.version} 已下载完成，退出程序时自动安装` });
+  });
+  autoUpdater.checkForUpdates().catch(() => dialog.showMessageBox({ type:'warning', message:'检查更新失败，请确认网络' }));
+}
 
 // 单实例锁
 const gotLock = app.requestSingleInstanceLock();
@@ -152,6 +164,7 @@ function refreshTrayMenu() {
     { label: '显示窗口', click: () => showMainWindow() },
     { type: 'checkbox', label: '开机自动启动', checked: isAutostartOn(), click: (it) => { setAutostart(it.checked); } },
     { label: '图标常驻任务栏', click: () => exec('start ms-settings:taskbar') },
+    { label: '检查更新', click: () => checkUpdateManual() },
     { type: 'separator' },
     { label: '退出', click: () => { forceQuit = true; app.quit(); } }
   ]));
