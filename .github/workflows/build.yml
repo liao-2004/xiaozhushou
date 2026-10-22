@@ -3,7 +3,11 @@ name: build
 on:
   push:
     branches: [master]
-  workflow_dispatch:   # 也可手动点按钮触发
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # 允许创建 Release 和打 tag
 
 jobs:
   build:
@@ -18,19 +22,20 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: 打包
-        run: npm run dist
+      - name: 读出版本号
+        id: ver
+        run: echo "version=$(node -p require('./package.json').version)" >> $env:GITHUB_OUTPUT
+
+      - name: 打包并发布到 GitHub Release
+        run: npx electron-builder --win --publish always
         env:
-          # 国内镜像加速（GitHub 海外 runner 可不用，留着无害）
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
           ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 上传安装包为产物
         uses: actions/upload-artifact@v4
         with:
-          name: OnOffScheduler-installer
-          path: |
-            release/*.exe
-            release/*.blockmap
+          name: OnOffScheduler-v${{ steps.ver.outputs.version }}
+          path: release/*.exe
           if-no-files-found: error

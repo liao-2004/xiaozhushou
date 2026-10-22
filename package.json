@@ -48,6 +48,9 @@
       "target": ["nsis"],
       "icon": "app-icon.png",
       "signAndEditExecutable": false
-    }
+    },
+    "publish": [
+      { "provider": "github", "releaseType": "release" }
+    ]
   }
 }
