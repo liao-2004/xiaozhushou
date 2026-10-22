@@ -5,9 +5,13 @@ on:
     branches: [master]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: '发版号（如 1.0.1），留空则按 package.json'
+        required: false
 
 permissions:
-  contents: write   # 允许创建 Release 和打 tag
+  contents: write
 
 jobs:
   build:
@@ -22,12 +26,19 @@ jobs:
       - name: 安装依赖
         run: npm install
 
-      - name: 读出版本号
+      - name: 决定版本号
         id: ver
-        run: echo "version=$(node -p require('./package.json').version)" >> $env:GITHUB_OUTPUT
+        shell: pwsh
+        run: |
+          $v = ''
+          if ('${{ github.ref }}' -like 'refs/tags/v*') { $v = '${{ github.ref }}'.Substring(10) }
+          elseif ('${{ github.event.inputs.version }}') { $v = '${{ github.event.inputs.version }}' }
+          if (-not $v) { $v = node -p "require('./package.json').version" }
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "版本号: $v"
 
       - name: 打包并发布到 GitHub Release
-        run: npx electron-builder --win --publish always
+        run: npx electron-builder --win --publish always -c.version=${{ steps.ver.outputs.version }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/

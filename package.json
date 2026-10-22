@@ -45,12 +45,17 @@
       "mirror": "https://npmmirror.com/mirrors/electron/"
     },
     "win": {
-      "target": ["nsis"],
+      "target": [
+        "nsis"
+      ],
       "icon": "app-icon.png",
       "signAndEditExecutable": false
     },
     "publish": [
-      { "provider": "github", "releaseType": "release" }
+      {
+        "provider": "github",
+        "releaseType": "release"
+      }
     ]
   }
 }
