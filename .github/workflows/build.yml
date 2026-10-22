@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:   # 也可手动点按钮触发
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装依赖
+        run: npm install
+
+      - name: 打包
+        run: npm run dist
+        env:
+          # 国内镜像加速（GitHub 海外 runner 可不用，留着无害）
+          ELECTRON_MIRROR: https://npmmirror.com/mirrors/electron/
+          ELECTRON_BUILDER_BINARIES_MIRROR: https://npmmirror.com/mirrors/electron-builder-binaries/
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 上传安装包为产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: OnOffScheduler-installer
+          path: |
+            release/*.exe
+            release/*.blockmap
+          if-no-files-found: error
